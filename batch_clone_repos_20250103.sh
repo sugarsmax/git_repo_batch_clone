@@ -66,8 +66,20 @@ clone_repository() {
     local repo_url="$1"
     local target_dir="$2"
     
-    # Extract repo name from SSH URL
-    local repo_name=$(echo "$repo_url" | sed -E 's/.*[:/]([^/]+)\.git$/\1/')
+    # Extract repo name from URL (handle both .git and non-.git URLs)
+    local repo_name
+    if [[ "$repo_url" == *.git ]]; then
+        # URL ends with .git
+        repo_name=$(echo "$repo_url" | LC_ALL=C sed -E 's/.*[:/]([^/]+)\.git$/\1/')
+    else
+        # URL doesn't end with .git
+        repo_name=$(echo "$repo_url" | LC_ALL=C sed -E 's/.*[:/]([^/]+)$/\1/')
+    fi
+    
+    # Debug output
+    echo -e "${CYAN}Processing URL: $repo_url${NC}"
+    echo -e "${CYAN}Extracted repo name: $repo_name${NC}"
+    
     local target_path="$target_dir/$repo_name"
     
     # Skip if directory already exists
@@ -115,20 +127,42 @@ fi
 
 # Read repository URLs and handle both formats
 repos=()
-while IFS= read -r line; do
-    # Skip empty lines
-    [[ -z "$line" || "$line" =~ ^[[:space:]]*$ ]] && continue
-    
-    # Handle tab-separated format from collect_git_urls script
-    if [[ "$line" == *$'\t'* ]]; then
-        repo_url=$(echo "$line" | cut -f2)
-    else
-        # Handle plain URL format
-        repo_url="$line"
-    fi
-    
-    repos+=("$repo_url")
-done < "$INPUT_FILE"
+
+# Check if file is UTF-16 encoded (starts with BOM)
+if [[ $(head -c 2 "$INPUT_FILE" | hexdump -ve '1/1 "%02x"') == "fffe" ]]; then
+    echo -e "${YELLOW}Detected UTF-16 encoded file, converting to UTF-8...${NC}"
+    # Convert UTF-16 to UTF-8 and process
+    while IFS= read -r line; do
+        # Skip empty lines
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*$ ]] && continue
+        
+        # Handle tab-separated format from collect_git_urls script
+        if [[ "$line" == *$'\t'* ]]; then
+            repo_url=$(echo "$line" | cut -f2)
+        else
+            # Handle plain URL format
+            repo_url="$line"
+        fi
+        
+        repos+=("$repo_url")
+    done < <(iconv -f UTF-16LE -t UTF-8 "$INPUT_FILE")
+else
+    # Handle regular UTF-8 file
+    while IFS= read -r line; do
+        # Skip empty lines
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*$ ]] && continue
+        
+        # Handle tab-separated format from collect_git_urls script
+        if [[ "$line" == *$'\t'* ]]; then
+            repo_url=$(echo "$line" | cut -f2)
+        else
+            # Handle plain URL format
+            repo_url="$line"
+        fi
+        
+        repos+=("$repo_url")
+    done < "$INPUT_FILE"
+fi
 
 echo -e "${CYAN}Found ${#repos[@]} repositories to clone${NC}"
 echo -e "${CYAN}Target directory: $TARGET_DIRECTORY${NC}"
