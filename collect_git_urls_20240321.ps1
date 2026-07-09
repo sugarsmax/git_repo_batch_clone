@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$RootPath = (Get-Location).Path,
     [Parameter(Mandatory=$false)]
-    [string]$OutputFile = "$([Environment]::GetFolderPath('UserProfile'))\Downloads\git_repo_list_$(Get-Date -Format 'yyyyMMdd_HHmm').txt"
+    [string]$OutputFile = "$(Split-Path -Parent $MyInvocation.MyCommand.Path)\git_repo_list_$($env:COMPUTERNAME)_$(Get-Date -Format 'yyyyMMdd_HHmm').txt"
 )
 
 # Function to get Git remote URL
